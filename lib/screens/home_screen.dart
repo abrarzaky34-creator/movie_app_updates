@@ -1,7 +1,7 @@
-
 import 'package:flutter/material.dart';
 import '../models/movie.dart';
 import '../services/movie_api_service.dart';
+import 'movie_details_screen.dart';
 import 'update_profile_screen.dart';
 import 'login_screen.dart';
 
@@ -251,49 +251,64 @@ class _FeaturedCard extends StatelessWidget {
     this.height = 351,
   });
 
+  void _openDetails(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MovieDetailsScreen(
+          movieId: movie.id,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: AppColors.fieldFill,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.network(
-            movie.largeCoverImage.isNotEmpty
-                ? movie.largeCoverImage
-                : movie.mediumCoverImage,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return const Center(
-                child: Icon(
-                  Icons.movie_creation_outlined,
-                  color: AppColors.textGrey,
-                  size: 56,
-                ),
-              );
-            },
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
+    return InkWell(
+      onTap: () => _openDetails(context),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: AppColors.fieldFill,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              movie.largeCoverImage.isNotEmpty
+                  ? movie.largeCoverImage
+                  : movie.mediumCoverImage,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return const Center(
+                  child: Icon(
+                    Icons.movie_creation_outlined,
+                    color: AppColors.textGrey,
+                    size: 56,
+                  ),
+                );
+              },
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
 
-              return const Center(
-                child: CircularProgressIndicator(
-                  color: AppColors.primary,
-                ),
-              );
-            },
-          ),
-          Positioned(
-            top: 10,
-            left: 10,
-            child: _RatingBadge(rating: movie.rating),
-          ),
-        ],
+                return const Center(
+                  child: CircularProgressIndicator(
+                    color: AppColors.primary,
+                  ),
+                );
+              },
+            ),
+            Positioned(
+              top: 10,
+              left: 10,
+              child: _RatingBadge(rating: movie.rating),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -989,60 +1004,75 @@ class _MovieCard extends StatelessWidget {
 
   const _MovieCard({required this.movie});
 
+  void _openDetails(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MovieDetailsScreen(
+          movieId: movie.id,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 120,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppColors.fieldFill,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    movie.mediumCoverImage,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Center(
-                        child: Icon(
-                          Icons.movie_outlined,
-                          color: AppColors.textGrey,
-                          size: 32,
-                        ),
-                      );
-                    },
-                  ),
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: _RatingBadge(
-                      rating: movie.rating,
+    return InkWell(
+      onTap: () => _openDetails(context),
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox(
+        width: 120,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: AppColors.fieldFill,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      movie.mediumCoverImage,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Center(
+                          child: Icon(
+                            Icons.movie_outlined,
+                            color: AppColors.textGrey,
+                            size: 32,
+                          ),
+                        );
+                      },
                     ),
-                  ),
-                ],
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: _RatingBadge(
+                        rating: movie.rating,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            movie.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.textWhite,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
+            const SizedBox(height: 6),
+            Text(
+              movie.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.textWhite,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
