@@ -1,6 +1,9 @@
+
 import 'package:flutter/material.dart';
-import 'update_profile_screen.dart' show UpdateProfileScreen;
-import 'login_screen.dart' show LoginScreen;
+import '../models/movie.dart';
+import '../services/movie_api_service.dart';
+import 'update_profile_screen.dart';
+import 'login_screen.dart';
 
 class AppColors {
   static const Color background = Color(0xFF121312);
@@ -13,6 +16,13 @@ class AppColors {
   static const Color danger = Color(0xFFE53935);
 }
 
+final List<String> _dummyCategories = const [
+  'Action',
+  'Adventure',
+  'Animation',
+  'Biography',
+  'Comedy',
+];
 
 class MovieItem {
   final String title;
@@ -25,14 +35,6 @@ final List<MovieItem> _dummyMovies = List.generate(
   14,
       (index) => MovieItem(title: 'Movie ${index + 1}'),
 );
-
-final List<String> _dummyCategories = const [
-  'Action',
-  'Adventure',
-  'Animation',
-  'Biography',
-  'Comedy',
-];
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -73,13 +75,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-
-
 class _BottomNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onTap;
 
-  const _BottomNavBar({required this.selectedIndex, required this.onTap});
+  const _BottomNavBar({
+    required this.selectedIndex,
+    required this.onTap,
+  });
 
   static const List<IconData> _icons = [
     Icons.home_rounded,
@@ -102,19 +105,27 @@ class _BottomNavBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: List.generate(_icons.length, (index) {
           final bool isSelected = index == selectedIndex;
+
           return GestureDetector(
             onTap: () => onTap(index),
             behavior: HitTestBehavior.opaque,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 10,
+              ),
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary : Colors.transparent,
+                color: isSelected
+                    ? AppColors.primary
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
                 _icons[index],
-                color: isSelected ? Colors.black : AppColors.textGrey,
+                color: isSelected
+                    ? Colors.black
+                    : AppColors.textGrey,
                 size: 24,
               ),
             ),
@@ -125,53 +136,112 @@ class _BottomNavBar extends StatelessWidget {
   }
 }
 
-
-
-class _HomeTab extends StatelessWidget {
+class _HomeTab extends StatefulWidget {
   const _HomeTab();
 
   @override
+  State<_HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<_HomeTab> {
+  final MovieApiService _movieApiService = MovieApiService();
+
+  late Future<List<Movie>> _popularMovies;
+
+  @override
+  void initState() {
+    super.initState();
+    _popularMovies = _movieApiService.getPopularMovies();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.only(top: 12, bottom: 24),
-      children: [
-        Center(
-          child: Image.asset(
-            'assets/images/available_now.png',
-            width: 267,
-            height: 93,
-            fit: BoxFit.contain,
-          ),
-        ),
-        const SizedBox(height: 20),
-        _FeaturedCarousel(movies: _dummyMovies),
-
-        const SizedBox(height: 24),
-
-        Center(
-          child: GestureDetector(
-            onTap: () {},
-            child: Image.asset(
-              'assets/images/watch_now.png',
-              width: 180,
-              height: 64,
-              fit: BoxFit.contain,
+    return FutureBuilder<List<Movie>>(
+      future: _popularMovies,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(
+              color: AppColors.primary,
             ),
-          ),
-        ),
+          );
+        }
 
-        const SizedBox(height: 28),
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Something went wrong',
+                  style: TextStyle(
+                    color: AppColors.textWhite,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _popularMovies =
+                          _movieApiService.getPopularMovies();
+                    });
+                  },
+                  child: const Text('Try Again'),
+                ),
+              ],
+            ),
+          );
+        }
 
-        ..._dummyCategories.map(
-              (category) => _CategorySection(title: category),
-        ),
-      ],
+        final movies = snapshot.data ?? [];
+
+        return ListView(
+          padding: const EdgeInsets.only(top: 12, bottom: 24),
+          children: [
+            Center(
+              child: Image.asset(
+                'assets/images/available_now.png',
+                width: 267,
+                height: 93,
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(height: 20),
+            if (movies.isNotEmpty)
+              _FeaturedCarousel(movies: movies)
+            else
+              const Center(
+                child: Text(
+                  'No movies found',
+                  style: TextStyle(color: AppColors.textGrey),
+                ),
+              ),
+            const SizedBox(height: 24),
+            Center(
+              child: GestureDetector(
+                onTap: () {},
+                child: Image.asset(
+                  'assets/images/watch_now.png',
+                  width: 180,
+                  height: 64,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
+            ..._dummyCategories.map(
+                  (category) => _CategorySection(title: category),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
 class _FeaturedCard extends StatelessWidget {
-  final MovieItem movie;
+  final Movie movie;
   final double width;
   final double height;
 
@@ -190,14 +260,33 @@ class _FeaturedCard extends StatelessWidget {
         color: AppColors.fieldFill,
         borderRadius: BorderRadius.circular(16),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Stack(
+        fit: StackFit.expand,
         children: [
-          const Center(
-            child: Icon(
-              Icons.movie_creation_outlined,
-              color: AppColors.textGrey,
-              size: 56,
-            ),
+          Image.network(
+            movie.largeCoverImage.isNotEmpty
+                ? movie.largeCoverImage
+                : movie.mediumCoverImage,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return const Center(
+                child: Icon(
+                  Icons.movie_creation_outlined,
+                  color: AppColors.textGrey,
+                  size: 56,
+                ),
+              );
+            },
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+
+              return const Center(
+                child: CircularProgressIndicator(
+                  color: AppColors.primary,
+                ),
+              );
+            },
           ),
           Positioned(
             top: 10,
@@ -210,14 +299,14 @@ class _FeaturedCard extends StatelessWidget {
   }
 }
 
-
 class _FeaturedCarousel extends StatefulWidget {
-  final List<MovieItem> movies;
+  final List<Movie> movies;
 
   const _FeaturedCarousel({required this.movies});
 
   @override
-  State<_FeaturedCarousel> createState() => _FeaturedCarouselState();
+  State<_FeaturedCarousel> createState() =>
+      _FeaturedCarouselState();
 }
 
 class _FeaturedCarouselState extends State<_FeaturedCarousel> {
@@ -231,12 +320,17 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(viewportFraction: _viewportFraction);
-    _page = 0;
+
+    _pageController = PageController(
+      viewportFraction: _viewportFraction,
+    );
+
     _pageController.addListener(() {
-      setState(() {
-        _page = _pageController.page ?? 0;
-      });
+      if (mounted) {
+        setState(() {
+          _page = _pageController.page ?? 0;
+        });
+      }
     });
   }
 
@@ -252,7 +346,8 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
       height: _cardHeight,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final double pageWidth = constraints.maxWidth * _viewportFraction;
+          final double pageWidth =
+              constraints.maxWidth * _viewportFraction;
           final double cardWidth = pageWidth - _gap;
 
           return PageView.builder(
@@ -260,11 +355,14 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
             physics: const BouncingScrollPhysics(),
             itemCount: widget.movies.length,
             itemBuilder: (context, index) {
-              final double distance = (index - _page).abs().clamp(0.0, 1.0);
-              final double opacity = 1 - (distance * 0.5); // side: ~0.5
+              final double distance =
+              (index - _page).abs().clamp(0.0, 1.0);
+              final double opacity = 1 - (distance * 0.5);
 
               return Padding(
-                padding: EdgeInsets.symmetric(horizontal: _gap / 2),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: _gap / 2,
+                ),
                 child: Opacity(
                   opacity: opacity,
                   child: _FeaturedCard(
@@ -282,10 +380,26 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
   }
 }
 
-class _CategorySection extends StatelessWidget {
+class _CategorySection extends StatefulWidget {
   final String title;
 
   const _CategorySection({required this.title});
+
+  @override
+  State<_CategorySection> createState() =>
+      _CategorySectionState();
+}
+
+class _CategorySectionState extends State<_CategorySection> {
+  final MovieApiService _movieApiService = MovieApiService();
+
+  late Future<List<Movie>> _movies;
+
+  @override
+  void initState() {
+    super.initState();
+    _movies = _movieApiService.getMoviesByCategory(widget.title);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -300,7 +414,7 @@ class _CategorySection extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  title,
+                  widget.title,
                   style: const TextStyle(
                     color: AppColors.textWhite,
                     fontWeight: FontWeight.w700,
@@ -324,13 +438,54 @@ class _CategorySection extends StatelessWidget {
           const SizedBox(height: 12),
           SizedBox(
             height: 170,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: _dummyMovies.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 14),
-              itemBuilder: (context, index) {
-                return _MovieCard(movie: _dummyMovies[index]);
+            child: FutureBuilder<List<Movie>>(
+              future: _movies,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primary,
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return const Center(
+                    child: Text(
+                      'Failed to load movies',
+                      style: TextStyle(
+                        color: AppColors.textGrey,
+                      ),
+                    ),
+                  );
+                }
+
+                final movies = snapshot.data ?? [];
+
+                if (movies.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No movies found',
+                      style: TextStyle(
+                        color: AppColors.textGrey,
+                      ),
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                  ),
+                  itemCount: movies.length,
+                  separatorBuilder: (_, __) =>
+                  const SizedBox(width: 14),
+                  itemBuilder: (context, index) {
+                    return _MovieCard(movie: movies[index]);
+                  },
+                );
               },
             ),
           ),
@@ -340,7 +495,6 @@ class _CategorySection extends StatelessWidget {
   }
 }
 
-
 class _SearchTab extends StatefulWidget {
   const _SearchTab();
 
@@ -349,7 +503,8 @@ class _SearchTab extends StatefulWidget {
 }
 
 class _SearchTabState extends State<_SearchTab> {
-  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _searchController =
+  TextEditingController();
 
   @override
   void dispose() {
@@ -369,15 +524,25 @@ class _SearchTabState extends State<_SearchTab> {
             height: 52,
             child: TextField(
               controller: _searchController,
-              style: const TextStyle(color: AppColors.textWhite, fontSize: 14),
+              style: const TextStyle(
+                color: AppColors.textWhite,
+                fontSize: 14,
+              ),
               cursorColor: AppColors.primary,
               decoration: InputDecoration(
                 filled: true,
                 fillColor: AppColors.fieldFill,
                 hintText: 'Search',
-                hintStyle: const TextStyle(color: AppColors.textGrey),
-                prefixIcon: const Icon(Icons.search, color: AppColors.textWhite),
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                hintStyle: const TextStyle(
+                  color: AppColors.textGrey,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  color: AppColors.textWhite,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
                   borderSide: BorderSide.none,
@@ -417,25 +582,40 @@ class _BrowseTabState extends State<_BrowseTab> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 20),
             itemCount: _dummyCategories.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            separatorBuilder: (_, __) =>
+            const SizedBox(width: 10),
             itemBuilder: (context, index) {
-              final bool isSelected = index == _selectedCategory;
+              final bool isSelected =
+                  index == _selectedCategory;
+
               return GestureDetector(
-                onTap: () => setState(() => _selectedCategory = index),
+                onTap: () {
+                  setState(() {
+                    _selectedCategory = index;
+                  });
+                },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                  ),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : Colors.transparent,
+                    color: isSelected
+                        ? AppColors.primary
+                        : Colors.transparent,
                     border: Border.all(
-                      color: isSelected ? AppColors.primary : AppColors.fieldFill,
+                      color: isSelected
+                          ? AppColors.primary
+                          : AppColors.fieldFill,
                     ),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     _dummyCategories[index],
                     style: TextStyle(
-                      color: isSelected ? Colors.black : AppColors.textWhite,
+                      color: isSelected
+                          ? Colors.black
+                          : AppColors.textWhite,
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
@@ -457,7 +637,6 @@ class _BrowseTabState extends State<_BrowseTab> {
   }
 }
 
-
 class _ProfileTab extends StatefulWidget {
   const _ProfileTab();
 
@@ -468,6 +647,23 @@ class _ProfileTab extends StatefulWidget {
 class _ProfileTabState extends State<_ProfileTab> {
   bool _showWatchList = true;
 
+  void _goToEditProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const UpdateProfileScreen(),
+      ),
+    );
+  }
+
+  void _signOut() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const LoginScreen(),
+      ),
+          (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -475,7 +671,6 @@ class _ProfileTabState extends State<_ProfileTab> {
       child: Column(
         children: [
           const SizedBox(height: 16),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -492,13 +687,17 @@ class _ProfileTabState extends State<_ProfileTab> {
                   size: 36,
                 ),
               ),
-              const _ProfileStat(label: 'Wish List', value: '0'),
-              const _ProfileStat(label: 'History', value: '0'),
+              const _ProfileStat(
+                label: 'Wish List',
+                value: '0',
+              ),
+              const _ProfileStat(
+                label: 'History',
+                value: '0',
+              ),
             ],
           ),
-
           const SizedBox(height: 12),
-
           const Text(
             'User Name',
             style: TextStyle(
@@ -507,23 +706,14 @@ class _ProfileTabState extends State<_ProfileTab> {
               fontSize: 16,
             ),
           ),
-
           const SizedBox(height: 20),
-
           Row(
             children: [
               Expanded(
                 child: SizedBox(
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const UpdateProfileScreen(),
-                        ),
-                      );
-                    },
+                    onPressed: _goToEditProfile,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.black,
@@ -534,7 +724,9 @@ class _ProfileTabState extends State<_ProfileTab> {
                     ),
                     child: const Text(
                       'Edit Profile',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -544,19 +736,13 @@ class _ProfileTabState extends State<_ProfileTab> {
                 child: SizedBox(
                   height: 48,
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const LoginScreen(),
-                        ),
-                            (route) => false,
-                      );
-                    },
+                    onPressed: _signOut,
                     icon: const Icon(Icons.logout, size: 18),
                     label: const Text(
                       'Exit',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.danger,
@@ -571,9 +757,7 @@ class _ProfileTabState extends State<_ProfileTab> {
               ),
             ],
           ),
-
           const SizedBox(height: 24),
-
           Row(
             children: [
               Expanded(
@@ -581,7 +765,11 @@ class _ProfileTabState extends State<_ProfileTab> {
                   label: 'Watch List',
                   icon: Icons.list_alt,
                   isSelected: _showWatchList,
-                  onTap: () => setState(() => _showWatchList = true),
+                  onTap: () {
+                    setState(() {
+                      _showWatchList = true;
+                    });
+                  },
                 ),
               ),
               Expanded(
@@ -589,15 +777,20 @@ class _ProfileTabState extends State<_ProfileTab> {
                   label: 'History',
                   icon: Icons.folder_outlined,
                   isSelected: !_showWatchList,
-                  onTap: () => setState(() => _showWatchList = false),
+                  onTap: () {
+                    setState(() {
+                      _showWatchList = false;
+                    });
+                  },
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: 8),
-          const Divider(color: AppColors.fieldFill, height: 1),
-
+          const Divider(
+            color: AppColors.fieldFill,
+            height: 1,
+          ),
           Expanded(
             child: Center(
               child: Column(
@@ -610,8 +803,13 @@ class _ProfileTabState extends State<_ProfileTab> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    _showWatchList ? 'Your watch list is empty' : 'No history yet',
-                    style: const TextStyle(color: AppColors.textGrey, fontSize: 14),
+                    _showWatchList
+                        ? 'Your watch list is empty'
+                        : 'No history yet',
+                    style: const TextStyle(
+                      color: AppColors.textGrey,
+                      fontSize: 14,
+                    ),
                   ),
                 ],
               ),
@@ -627,7 +825,10 @@ class _ProfileStat extends StatelessWidget {
   final String label;
   final String value;
 
-  const _ProfileStat({required this.label, required this.value});
+  const _ProfileStat({
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -644,7 +845,10 @@ class _ProfileStat extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           label,
-          style: const TextStyle(color: AppColors.textGrey, fontSize: 13),
+          style: const TextStyle(
+            color: AppColors.textGrey,
+            fontSize: 13,
+          ),
         ),
       ],
     );
@@ -666,7 +870,10 @@ class _ProfileTabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color = isSelected ? AppColors.primary : AppColors.textGrey;
+    final Color color = isSelected
+        ? AppColors.primary
+        : AppColors.textGrey;
+
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -678,22 +885,25 @@ class _ProfileTabButton extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 label,
-                style: TextStyle(color: color, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Container(
             height: 2,
-            color: isSelected ? AppColors.primary : Colors.transparent,
+            color: isSelected
+                ? AppColors.primary
+                : Colors.transparent,
           ),
         ],
       ),
     );
   }
 }
-
-
 
 class _MovieGrid extends StatelessWidget {
   final List<MovieItem> movies;
@@ -704,21 +914,24 @@ class _MovieGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return GridView.builder(
       itemCount: movies.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate:
+      const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 14,
         mainAxisSpacing: 14,
         childAspectRatio: 0.68,
       ),
-      itemBuilder: (context, index) => _MovieCard(movie: movies[index]),
+      itemBuilder: (context, index) {
+        return _MovieItemCard(movie: movies[index]);
+      },
     );
   }
 }
 
-class _MovieCard extends StatelessWidget {
+class _MovieItemCard extends StatelessWidget {
   final MovieItem movie;
 
-  const _MovieCard({required this.movie});
+  const _MovieItemCard({required this.movie});
 
   @override
   Widget build(BuildContext context) {
@@ -746,7 +959,73 @@ class _MovieCard extends StatelessWidget {
                   Positioned(
                     top: 8,
                     left: 8,
-                    child: _RatingBadge(rating: movie.rating),
+                    child: _RatingBadge(
+                      rating: movie.rating,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            movie.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textWhite,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MovieCard extends StatelessWidget {
+  final Movie movie;
+
+  const _MovieCard({required this.movie});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 120,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: AppColors.fieldFill,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    movie.mediumCoverImage,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Center(
+                        child: Icon(
+                          Icons.movie_outlined,
+                          color: AppColors.textGrey,
+                          size: 32,
+                        ),
+                      );
+                    },
+                  ),
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: _RatingBadge(
+                      rating: movie.rating,
+                    ),
                   ),
                 ],
               ),
@@ -777,7 +1056,10 @@ class _RatingBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 6,
+        vertical: 3,
+      ),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.7),
         borderRadius: BorderRadius.circular(6),
@@ -794,7 +1076,11 @@ class _RatingBadge extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 2),
-          const Icon(Icons.star, color: AppColors.primary, size: 11),
+          const Icon(
+            Icons.star,
+            color: AppColors.primary,
+            size: 11,
+          ),
         ],
       ),
     );
