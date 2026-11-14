@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
+import '../services/api_constants.dart';
 class MovieDetailsState {
   final bool isLoading;
   final String? error;
@@ -21,7 +21,7 @@ class MovieDetailsCubit extends Cubit<MovieDetailsState> {
 
   final Dio dio = Dio(
     BaseOptions(
-      baseUrl: 'https://yts.lt/api/v2/',
+      baseUrl: '${ApiConstants.baseUrl}/',
       connectTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 20),
     ),
