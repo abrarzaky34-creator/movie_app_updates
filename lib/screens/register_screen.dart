@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../services/auth_service.dart';
+import 'home_screen.dart' show HomeScreen;
+
 class AppColors {
   static const Color background = Color(0xFF121312);
   static const Color primary = Color(0xFFF6BD00);
@@ -24,10 +27,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _confirmPasswordController =
   TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  final AuthService _authService = AuthService();
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-
+  bool _loading = false;
 
   int _selectedAvatarIndex = 1;
 
@@ -53,7 +57,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  void _createAccount() {
+  Future<void> _createAccount() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -81,8 +85,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    _showMessage('Account created');
-    Navigator.of(context).pop();
+    setState(() => _loading = true);
+    try {
+      await _authService.register(
+        name: name,
+        email: email,
+        password: password,
+        phone: phone,
+        avatar: _avatars[_selectedAvatarIndex],
+      );
+      if (!mounted) return;
+      _showMessage('Account created');
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+            (route) => false,
+      );
+    } catch (e) {
+      _showMessage(AuthService.messageFor(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   void _goToLogin() {
@@ -102,8 +124,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 16),
-
-
               Row(
                 children: [
                   IconButton(
@@ -128,10 +148,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(width: 48),
                 ],
               ),
-
               const SizedBox(height: 20),
-
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -151,9 +168,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   );
                 }),
               ),
-
               const SizedBox(height: 8),
-
               const Center(
                 child: Text(
                   'Avatar',
@@ -165,27 +180,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 24),
-
               _AuthTextField(
                 controller: _nameController,
                 hintText: 'Name',
                 icon: Icons.badge_outlined,
                 keyboardType: TextInputType.name,
               ),
-
               const SizedBox(height: 16),
-
               _AuthTextField(
                 controller: _emailController,
                 hintText: 'Email',
                 icon: Icons.email_outlined,
                 keyboardType: TextInputType.emailAddress,
               ),
-
               const SizedBox(height: 16),
-
               _AuthTextField(
                 controller: _passwordController,
                 hintText: 'Password',
@@ -206,9 +215,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                 ),
               ),
-
               const SizedBox(height: 16),
-
               _AuthTextField(
                 controller: _confirmPasswordController,
                 hintText: 'Confirm Password',
@@ -229,22 +236,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                 ),
               ),
-
               const SizedBox(height: 16),
-
               _AuthTextField(
                 controller: _phoneController,
                 hintText: 'Phone Number',
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
               ),
-
               const SizedBox(height: 24),
-
               SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _createAccount,
+                  onPressed: _loading ? null : _createAccount,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.black,
@@ -253,7 +256,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(15),
                     ),
                   ),
-                  child: const Text(
+                  child: _loading
+                      ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.black,
+                    ),
+                  )
+                      : const Text(
                     'Create Account',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
@@ -262,9 +274,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               Center(
                 child: GestureDetector(
                   onTap: _goToLogin,
@@ -292,15 +302,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 24),
-
               Center(
                 child: _LanguageSwitch(
                   onChanged: _changeLanguage,
                 ),
               ),
-
               const SizedBox(height: 24),
             ],
           ),
@@ -323,7 +330,6 @@ class _AvatarOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     final double size = isSelected ? 94 : 78;
 
     return GestureDetector(
@@ -448,7 +454,6 @@ class _LanguageSwitchState extends State<_LanguageSwitch> {
     const double switchWidth = 130;
     const double switchHeight = 60;
     const double flagSize = 48;
-
     const double selectedCircleSize = 70;
 
     return SizedBox(
