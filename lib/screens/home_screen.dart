@@ -661,6 +661,7 @@ class _BrowseTab extends StatefulWidget {
 }
 
 class _BrowseTabState extends State<_BrowseTab> {
+  final MovieApiService _movieApiService = MovieApiService();
   int _selectedCategory = 0;
 
   @override
@@ -722,12 +723,43 @@ class _BrowseTabState extends State<_BrowseTab> {
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Center(
-              child: Image.asset(
-                'assets/images/popcorn.png',
-                width: 70,
-                height: 70,
-              ),
+            child: FutureBuilder<List<Movie>>(
+              key: ValueKey(_selectedCategory),
+              future: _movieApiService
+                  .getMoviesByCategory(_dummyCategories[_selectedCategory]),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primary,
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  debugPrint('BROWSE ERROR: ${snapshot.error}');
+                  return const Center(
+                    child: Text(
+                      'Failed to load movies',
+                      style: TextStyle(color: AppColors.textGrey),
+                    ),
+                  );
+                }
+
+                final movies = snapshot.data ?? [];
+
+                if (movies.isEmpty) {
+                  return Center(
+                    child: Image.asset(
+                      'assets/images/popcorn.png',
+                      width: 70,
+                      height: 70,
+                    ),
+                  );
+                }
+
+                return _MovieGrid(movies: movies);
+              },
             ),
           ),
         ),
@@ -769,7 +801,9 @@ class _ProfileTabState extends State<_ProfileTab> {
             _avatarPath = doc.data()?['avatar'];
           });
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('PROFILE ERROR: $e');
+      }
     }
     if (mounted) {
       setState(() {

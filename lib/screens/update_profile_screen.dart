@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../services/firestore_service.dart';
 import 'forget_password_screens.dart' show ForgetPasswordScreen;
 import 'login_screen.dart' show LoginScreen;
 
@@ -26,11 +25,10 @@ class UpdateProfileScreen extends StatefulWidget {
 class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  final FirestoreService _firestoreService = FirestoreService();
 
-  final String? _uid = FirebaseAuth.instance.currentUser?.uid;
+  final User? _user = FirebaseAuth.instance.currentUser;
 
-  bool _loading = true;
+  bool _loading = false;
   bool _saving = false;
   bool _showAvatarPicker = false;
   int _selectedAvatarIndex = 0;
@@ -60,28 +58,9 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
     super.dispose();
   }
 
-  Future<void> _loadProfile() async {
-    final uid = _uid;
-    if (uid == null) {
-      setState(() => _loading = false);
-      return;
-    }
-
-    try {
-      final profile = await _firestoreService.getUserProfile(uid);
-      if (profile != null) {
-        _nameController.text = (profile['name'] ?? '') as String;
-        _phoneController.text = (profile['phone'] ?? '') as String;
-        final avatar = (profile['avatar'] ?? '') as String;
-        final index = _avatars.indexOf(avatar);
-        if (index >= 0) {
-          _selectedAvatarIndex = index;
-        }
-      }
-    } catch (_) {
-      if (mounted) _showMessage('Failed to load profile');
-    } finally {
-      if (mounted) setState(() => _loading = false);
+  void _loadProfile() {
+    if (_user != null) {
+      _nameController.text = _user?.displayName ?? '';
     }
   }
 
@@ -131,15 +110,11 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
 
   Future<void> _confirmDelete() async {
     final user = FirebaseAuth.instance.currentUser;
-    final uid = _uid;
-    if (user == null || uid == null) return;
+    if (user == null) return;
 
     setState(() => _saving = true);
     try {
       await user.delete();
-      try {
-        await _firestoreService.deleteUserProfile(uid);
-      } catch (_) {}
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
@@ -162,7 +137,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
   Future<void> _updateData() async {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
-    final uid = _uid;
 
     if (name.isEmpty) {
       _showMessage('Enter your name');
@@ -172,19 +146,9 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
       _showMessage('Phone number must be 11 digits');
       return;
     }
-    if (uid == null) {
-      _showMessage('You are not logged in');
-      return;
-    }
 
     setState(() => _saving = true);
     try {
-      await _firestoreService.updateUserProfile(
-        uid: uid,
-        name: name,
-        phone: phone,
-        avatar: _avatars[_selectedAvatarIndex],
-      );
       await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
       if (!mounted) return;
       _showMessage('Data updated');
