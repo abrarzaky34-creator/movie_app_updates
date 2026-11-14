@@ -1,4 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../services/firestore_service.dart';
 import 'forget_password_screens.dart' show ForgetPasswordScreen;
 import 'login_screen.dart' show LoginScreen;
 
@@ -21,13 +24,16 @@ class UpdateProfileScreen extends StatefulWidget {
 }
 
 class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
-  final TextEditingController _nameController =
-  TextEditingController(text: 'John Safwat');
-  final TextEditingController _phoneController =
-  TextEditingController(text: '01200000000');
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final FirestoreService _firestoreService = FirestoreService();
 
+  final String? _uid = FirebaseAuth.instance.currentUser?.uid;
+
+  bool _loading = true;
+  bool _saving = false;
   bool _showAvatarPicker = false;
-  int _selectedAvatarIndex = 1;
+  int _selectedAvatarIndex = 0;
 
   final List<String> _avatars = const [
     'assets/images/avatar_1.png',
@@ -42,10 +48,41 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadProfile() async {
+    final uid = _uid;
+    if (uid == null) {
+      setState(() => _loading = false);
+      return;
+    }
+
+    try {
+      final profile = await _firestoreService.getUserProfile(uid);
+      if (profile != null) {
+        _nameController.text = (profile['name'] ?? '') as String;
+        _phoneController.text = (profile['phone'] ?? '') as String;
+        final avatar = (profile['avatar'] ?? '') as String;
+        final index = _avatars.indexOf(avatar);
+        if (index >= 0) {
+          _selectedAvatarIndex = index;
+        }
+      }
+    } catch (_) {
+      if (mounted) _showMessage('Failed to load profile');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   void _togglePicker() {
@@ -70,22 +107,19 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
   void _deleteAccount() {
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Delete Account'),
           content: const Text('Are you sure you want to delete your account?'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('No'),
             ),
             TextButton(
               onPressed: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                      (route) => false,
-                );
+                Navigator.pop(dialogContext);
+                _confirmDelete();
               },
               child: const Text('Yes'),
             ),
@@ -95,9 +129,40 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
     );
   }
 
-  void _updateData() {
+  Future<void> _confirmDelete() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = _uid;
+    if (user == null || uid == null) return;
+
+    setState(() => _saving = true);
+    try {
+      await user.delete();
+      try {
+        await _firestoreService.deleteUserProfile(uid);
+      } catch (_) {}
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+            (route) => false,
+      );
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        _showMessage('Please log in again, then delete your account');
+      } else {
+        _showMessage(e.message ?? 'Failed to delete account');
+      }
+    } catch (_) {
+      _showMessage('Failed to delete account');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _updateData() async {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
+    final uid = _uid;
 
     if (name.isEmpty) {
       _showMessage('Enter your name');
@@ -107,12 +172,41 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
       _showMessage('Phone number must be 11 digits');
       return;
     }
+    if (uid == null) {
+      _showMessage('You are not logged in');
+      return;
+    }
 
-    _showMessage('Data updated');
+    setState(() => _saving = true);
+    try {
+      await _firestoreService.updateUserProfile(
+        uid: uid,
+        name: name,
+        phone: phone,
+        avatar: _avatars[_selectedAvatarIndex],
+      );
+      await FirebaseAuth.instance.currentUser?.updateDisplayName(name);
+      if (!mounted) return;
+      _showMessage('Data updated');
+      Navigator.of(context).pop();
+    } catch (_) {
+      _showMessage('Failed to update data');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -122,8 +216,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 16),
-
-
               Row(
                 children: [
                   IconButton(
@@ -148,10 +240,7 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                   const SizedBox(width: 48),
                 ],
               ),
-
               const SizedBox(height: 12),
-
-
               GestureDetector(
                 onTap: _togglePicker,
                 child: Column(
@@ -189,27 +278,21 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 24),
-
               _AuthTextField(
                 controller: _nameController,
                 hintText: 'Name',
                 icon: Icons.person_outline,
                 keyboardType: TextInputType.name,
               ),
-
               const SizedBox(height: 16),
-
               _AuthTextField(
                 controller: _phoneController,
                 hintText: 'Phone Number',
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
               ),
-
               const SizedBox(height: 20),
-
               GestureDetector(
                 onTap: _goToResetPassword,
                 child: const Text(
@@ -222,10 +305,7 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
-
-
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
                 child: _showAvatarPicker
@@ -242,13 +322,11 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                 )
                     : const SizedBox.shrink(key: ValueKey('empty')),
               ),
-
               const SizedBox(height: 32),
-
               SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _deleteAccount,
+                  onPressed: _saving ? null : _deleteAccount,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.danger,
                     foregroundColor: AppColors.textWhite,
@@ -266,13 +344,11 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _updateData,
+                  onPressed: _saving ? null : _updateData,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.black,
@@ -281,7 +357,16 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                       borderRadius: BorderRadius.circular(15),
                     ),
                   ),
-                  child: const Text(
+                  child: _saving
+                      ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.black,
+                    ),
+                  )
+                      : const Text(
                     'Update Data',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
@@ -290,7 +375,6 @@ class _UpdateProfileScreenState extends State<UpdateProfileScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 24),
             ],
           ),
