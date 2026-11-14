@@ -1,8 +1,8 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/movie.dart';
-import '../services/auth_service.dart';
-import '../services/firestore_service.dart';
 import '../services/movie_api_service.dart';
 import 'movie_details_screen.dart';
 import 'update_profile_screen.dart';
@@ -26,18 +26,6 @@ final List<String> _dummyCategories = const [
   'Biography',
   'Comedy',
 ];
-
-class MovieItem {
-  final String title;
-  final double rating;
-
-  const MovieItem({required this.title, this.rating = 7.7});
-}
-
-final List<MovieItem> _dummyMovies = List.generate(
-  14,
-      (index) => MovieItem(title: 'Movie ${index + 1}'),
-);
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -119,12 +107,16 @@ class _BottomNavBar extends StatelessWidget {
                 vertical: 10,
               ),
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary : Colors.transparent,
+                color: isSelected
+                    ? AppColors.primary
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
                 _icons[index],
-                color: isSelected ? Colors.black : AppColors.textGrey,
+                color: isSelected
+                    ? Colors.black
+                    : AppColors.textGrey,
                 size: 24,
               ),
             ),
@@ -182,7 +174,8 @@ class _HomeTabState extends State<_HomeTab> {
                 ElevatedButton(
                   onPressed: () {
                     setState(() {
-                      _popularMovies = _movieApiService.getPopularMovies();
+                      _popularMovies =
+                          _movieApiService.getPopularMovies();
                     });
                   },
                   child: const Text('Try Again'),
@@ -209,10 +202,11 @@ class _HomeTabState extends State<_HomeTab> {
             if (movies.isNotEmpty)
               _FeaturedCarousel(movies: movies)
             else
-              const Center(
-                child: Text(
-                  'No movies found',
-                  style: TextStyle(color: AppColors.textGrey),
+              Center(
+                child: Image.asset(
+                  'assets/images/popcorn.png',
+                  width: 70,
+                  height: 70,
                 ),
               ),
             const SizedBox(height: 24),
@@ -318,7 +312,8 @@ class _FeaturedCarousel extends StatefulWidget {
   const _FeaturedCarousel({required this.movies});
 
   @override
-  State<_FeaturedCarousel> createState() => _FeaturedCarouselState();
+  State<_FeaturedCarousel> createState() =>
+      _FeaturedCarouselState();
 }
 
 class _FeaturedCarouselState extends State<_FeaturedCarousel> {
@@ -366,8 +361,9 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
             physics: const BouncingScrollPhysics(),
             itemCount: widget.movies.length,
             itemBuilder: (context, index) {
-              final double distance = (index - _page).abs().clamp(0.0, 1.0);
-              final double opacity = 1 - (distance * 0.5);
+              final double distance =
+              (index - _page).abs().clamp(0.0, 1.0);
+              final double opacity = 1.0 - (distance * 0.5);
 
               return Padding(
                 padding: const EdgeInsets.symmetric(
@@ -396,7 +392,8 @@ class _CategorySection extends StatefulWidget {
   const _CategorySection({required this.title});
 
   @override
-  State<_CategorySection> createState() => _CategorySectionState();
+  State<_CategorySection> createState() =>
+      _CategorySectionState();
 }
 
 class _CategorySectionState extends State<_CategorySection> {
@@ -450,7 +447,8 @@ class _CategorySectionState extends State<_CategorySection> {
             child: FutureBuilder<List<Movie>>(
               future: _movies,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                if (snapshot.connectionState ==
+                    ConnectionState.waiting) {
                   return const Center(
                     child: CircularProgressIndicator(
                       color: AppColors.primary,
@@ -472,12 +470,11 @@ class _CategorySectionState extends State<_CategorySection> {
                 final movies = snapshot.data ?? [];
 
                 if (movies.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'No movies found',
-                      style: TextStyle(
-                        color: AppColors.textGrey,
-                      ),
+                  return Center(
+                    child: Image.asset(
+                      'assets/images/popcorn.png',
+                      width: 50,
+                      height: 50,
                     ),
                   );
                 }
@@ -488,7 +485,8 @@ class _CategorySectionState extends State<_CategorySection> {
                     horizontal: 20,
                   ),
                   itemCount: movies.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 14),
+                  separatorBuilder: (_, __) =>
+                  const SizedBox(width: 14),
                   itemBuilder: (context, index) {
                     return _MovieCard(movie: movies[index]);
                   },
@@ -511,11 +509,105 @@ class _SearchTab extends StatefulWidget {
 
 class _SearchTabState extends State<_SearchTab> {
   final TextEditingController _searchController = TextEditingController();
+  final MovieApiService _movieApiService = MovieApiService();
+
+  Timer? _debounce;
+  List<Movie> _results = [];
+  bool _isLoading = false;
+  String? _error;
+  String _lastQuery = '';
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onChanged(String value) {
+    _debounce?.cancel();
+    final query = value.trim();
+
+    if (query.isEmpty) {
+      setState(() {
+        _results = [];
+        _error = null;
+        _isLoading = false;
+        _lastQuery = '';
+      });
+      return;
+    }
+
+    _debounce = Timer(
+      const Duration(milliseconds: 500),
+          () => _search(query),
+    );
+  }
+
+  Future<void> _search(String query) async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _lastQuery = query;
+    });
+
+    try {
+      final movies = await _movieApiService.searchMovies(query);
+      if (!mounted || query != _lastQuery) return;
+      setState(() {
+        _results = movies;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || query != _lastQuery) return;
+      setState(() {
+        _error = 'Something went wrong';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Widget _buildMessage(String text, {bool isPopcorn = false}) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          isPopcorn
+              ? Image.asset('assets/images/popcorn.png', width: 70, height: 70)
+              : const Icon(Icons.error_outline, color: AppColors.textGrey, size: 48),
+          const SizedBox(height: 12),
+          Text(
+            text,
+            style: const TextStyle(
+              color: AppColors.textGrey,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
+    }
+
+    if (_error != null) {
+      return _buildMessage(_error!);
+    }
+
+    if (_lastQuery.isEmpty) {
+      return _buildMessage('Search for a movie', isPopcorn: true);
+    }
+
+    if (_results.isEmpty) {
+      return _buildMessage('No movies found', isPopcorn: true);
+    }
+
+    return _MovieGrid(movies: _results);
   }
 
   @override
@@ -530,6 +622,7 @@ class _SearchTabState extends State<_SearchTab> {
             height: 52,
             child: TextField(
               controller: _searchController,
+              onChanged: _onChanged,
               style: const TextStyle(
                 color: AppColors.textWhite,
                 fontSize: 14,
@@ -539,16 +632,12 @@ class _SearchTabState extends State<_SearchTab> {
                 filled: true,
                 fillColor: AppColors.fieldFill,
                 hintText: 'Search',
-                hintStyle: const TextStyle(
-                  color: AppColors.textGrey,
-                ),
+                hintStyle: const TextStyle(color: AppColors.textGrey),
                 prefixIcon: const Icon(
                   Icons.search,
                   color: AppColors.textWhite,
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 14,
-                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
                   borderSide: BorderSide.none,
@@ -557,9 +646,7 @@ class _SearchTabState extends State<_SearchTab> {
             ),
           ),
           const SizedBox(height: 20),
-          Expanded(
-            child: _MovieGrid(movies: _dummyMovies),
-          ),
+          Expanded(child: _buildBody()),
         ],
       ),
     );
@@ -588,9 +675,11 @@ class _BrowseTabState extends State<_BrowseTab> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 20),
             itemCount: _dummyCategories.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            separatorBuilder: (_, __) =>
+            const SizedBox(width: 10),
             itemBuilder: (context, index) {
-              final bool isSelected = index == _selectedCategory;
+              final bool isSelected =
+                  index == _selectedCategory;
 
               return GestureDetector(
                 onTap: () {
@@ -604,7 +693,9 @@ class _BrowseTabState extends State<_BrowseTab> {
                   ),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : Colors.transparent,
+                    color: isSelected
+                        ? AppColors.primary
+                        : Colors.transparent,
                     border: Border.all(
                       color: isSelected
                           ? AppColors.primary
@@ -615,7 +706,9 @@ class _BrowseTabState extends State<_BrowseTab> {
                   child: Text(
                     _dummyCategories[index],
                     style: TextStyle(
-                      color: isSelected ? Colors.black : AppColors.textWhite,
+                      color: isSelected
+                          ? Colors.black
+                          : AppColors.textWhite,
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
@@ -629,7 +722,13 @@ class _BrowseTabState extends State<_BrowseTab> {
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: _MovieGrid(movies: _dummyMovies),
+            child: Center(
+              child: Image.asset(
+                'assets/images/popcorn.png',
+                width: 70,
+                height: 70,
+              ),
+            ),
           ),
         ),
       ],
@@ -645,22 +744,55 @@ class _ProfileTab extends StatefulWidget {
 }
 
 class _ProfileTabState extends State<_ProfileTab> {
-  final FirestoreService _firestoreService = FirestoreService();
-  final AuthService _authService = AuthService();
-
   bool _showWatchList = true;
+  String _userName = 'User Name';
+  String? _avatarPath;
+  bool _isLoadingProfile = true;
 
-  void _goToEditProfile() {
-    Navigator.of(context).push(
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        if (doc.exists && mounted) {
+          setState(() {
+            _userName = doc.data()?['name'] ?? user.displayName ?? 'User Name';
+            _avatarPath = doc.data()?['avatar'];
+          });
+        }
+      } catch (_) {}
+    }
+    if (mounted) {
+      setState(() {
+        _isLoadingProfile = false;
+      });
+    }
+  }
+
+  void _goToEditProfile() async {
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const UpdateProfileScreen(),
       ),
     );
+    if (mounted) {
+      setState(() {
+        _isLoadingProfile = true;
+      });
+      _loadUserData();
+    }
   }
 
-  Future<void> _signOut() async {
-    await _authService.signOut();
-    if (!mounted) return;
+  void _signOut() {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (_) => const LoginScreen(),
@@ -671,198 +803,172 @@ class _ProfileTabState extends State<_ProfileTab> {
 
   @override
   Widget build(BuildContext context) {
-    final User? user = FirebaseAuth.instance.currentUser;
-
-    if (user == null) {
-      return const Center(
-        child: Text(
-          'You are not logged in',
-          style: TextStyle(color: AppColors.textGrey),
-        ),
-      );
-    }
-
-    return StreamBuilder<Map<String, dynamic>?>(
-      stream: _firestoreService.watchUserProfile(user.uid),
-      builder: (context, profileSnapshot) {
-        final profile = profileSnapshot.data;
-        final String name = (profile?['name'] as String?)?.isNotEmpty == true
-            ? profile!['name'] as String
-            : (user.displayName ?? 'User Name');
-        final String avatar = (profile?['avatar'] as String?) ?? '';
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        children: [
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: const BoxDecoration(
-                      color: AppColors.fieldFill,
-                      shape: BoxShape.circle,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: avatar.isNotEmpty
-                        ? Image.asset(
-                      avatar,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(
-                          Icons.person,
-                          color: AppColors.textGrey,
-                          size: 36,
-                        );
-                      },
-                    )
-                        : const Icon(
-                      Icons.person,
-                      color: AppColors.textGrey,
-                      size: 36,
+              Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(
+                  color: AppColors.fieldFill,
+                  shape: BoxShape.circle,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: _isLoadingProfile
+                    ? const Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
                     ),
                   ),
-                  StreamBuilder<List<int>>(
-                    stream: _firestoreService.watchFavoriteIds(user.uid),
-                    builder: (context, favSnapshot) {
-                      final count = favSnapshot.data?.length ?? 0;
-                      return _ProfileStat(
-                        label: 'Wish List',
-                        value: '$count',
-                      );
-                    },
-                  ),
-                  const _ProfileStat(
-                    label: 'History',
-                    value: '0',
-                  ),
-                ],
+                )
+                    : (_avatarPath != null && _avatarPath!.isNotEmpty
+                    ? Image.asset(_avatarPath!, fit: BoxFit.cover)
+                    : const Icon(
+                  Icons.person,
+                  color: AppColors.textGrey,
+                  size: 36,
+                )),
               ),
-              const SizedBox(height: 12),
-              Text(
-                name,
-                style: const TextStyle(
-                  color: AppColors.textWhite,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
+              const _ProfileStat(
+                label: 'Wish List',
+                value: '0',
+              ),
+              const _ProfileStat(
+                label: 'History',
+                value: '0',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _userName,
+            style: const TextStyle(
+              color: AppColors.textWhite,
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: _goToEditProfile,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.black,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text(
+                      'Edit Profile',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: _goToEditProfile,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.black,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: const Text(
-                          'Edit Profile',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: SizedBox(
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        onPressed: _signOut,
-                        icon: const Icon(Icons.logout, size: 18),
-                        label: const Text(
-                          'Exit',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.danger,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ProfileTabButton(
-                      label: 'Watch List',
-                      icon: Icons.list_alt,
-                      isSelected: _showWatchList,
-                      onTap: () {
-                        setState(() {
-                          _showWatchList = true;
-                        });
-                      },
-                    ),
-                  ),
-                  Expanded(
-                    child: _ProfileTabButton(
-                      label: 'History',
-                      icon: Icons.folder_outlined,
-                      isSelected: !_showWatchList,
-                      onTap: () {
-                        setState(() {
-                          _showWatchList = false;
-                        });
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Divider(
-                color: AppColors.fieldFill,
-                height: 1,
-              ),
+              const SizedBox(width: 12),
               Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.local_movies_outlined,
-                        color: AppColors.textGrey,
-                        size: 48,
+                child: SizedBox(
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _signOut,
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: const Text(
+                      'Exit',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        _showWatchList
-                            ? 'Your watch list is empty'
-                            : 'No history yet',
-                        style: const TextStyle(
-                          color: AppColors.textGrey,
-                          fontSize: 14,
-                        ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.danger,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ],
           ),
-        );
-      },
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: _ProfileTabButton(
+                  label: 'Watch List',
+                  icon: Icons.list_alt,
+                  isSelected: _showWatchList,
+                  onTap: () {
+                    setState(() {
+                      _showWatchList = true;
+                    });
+                  },
+                ),
+              ),
+              Expanded(
+                child: _ProfileTabButton(
+                  label: 'History',
+                  icon: Icons.folder_outlined,
+                  isSelected: !_showWatchList,
+                  onTap: () {
+                    setState(() {
+                      _showWatchList = false;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Divider(
+            color: AppColors.fieldFill,
+            height: 1,
+          ),
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/images/popcorn.png',
+                    width: 70,
+                    height: 70,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _showWatchList
+                        ? 'Your watch list is empty'
+                        : 'No history yet',
+                    style: const TextStyle(
+                      color: AppColors.textGrey,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -916,7 +1022,9 @@ class _ProfileTabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color = isSelected ? AppColors.primary : AppColors.textGrey;
+    final Color color = isSelected
+        ? AppColors.primary
+        : AppColors.textGrey;
 
     return GestureDetector(
       onTap: onTap,
@@ -939,7 +1047,9 @@ class _ProfileTabButton extends StatelessWidget {
           const SizedBox(height: 8),
           Container(
             height: 2,
-            color: isSelected ? AppColors.primary : Colors.transparent,
+            color: isSelected
+                ? AppColors.primary
+                : Colors.transparent,
           ),
         ],
       ),
@@ -948,7 +1058,7 @@ class _ProfileTabButton extends StatelessWidget {
 }
 
 class _MovieGrid extends StatelessWidget {
-  final List<MovieItem> movies;
+  final List<Movie> movies;
 
   const _MovieGrid({required this.movies});
 
@@ -963,64 +1073,8 @@ class _MovieGrid extends StatelessWidget {
         childAspectRatio: 0.68,
       ),
       itemBuilder: (context, index) {
-        return _MovieItemCard(movie: movies[index]);
+        return _MovieCard(movie: movies[index]);
       },
-    );
-  }
-}
-
-class _MovieItemCard extends StatelessWidget {
-  final MovieItem movie;
-
-  const _MovieItemCard({required this.movie});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 120,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppColors.fieldFill,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Stack(
-                children: [
-                  const Center(
-                    child: Icon(
-                      Icons.movie_outlined,
-                      color: AppColors.textGrey,
-                      size: 32,
-                    ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: _RatingBadge(
-                      rating: movie.rating,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            movie.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.textWhite,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
